@@ -1,0 +1,28 @@
+# secrets & local config
+.env
+*.env.local
+
+# data & logs (never commit)
+data/
+logs/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp

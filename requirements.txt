@@ -1,0 +1,13 @@
+# JARVIS — Phase 1 Foundation dependencies
+# Justification for each (per DEVELOPMENT RULE 5: a dep must earn its place):
+
+fastapi==0.115.5          # ASGI web framework — /health, /chat, typed request models
+uvicorn[standard]==0.32.1 # ASGI server to run FastAPI
+pydantic==2.9.2           # request/response validation (FastAPI dep, pinned)
+pydantic-settings==2.6.1  # 12-factor config from .env with typed validation
+httpx==0.27.2             # async HTTP client — Ollama /api/chat, later web/OptionIQ
+python-dotenv==1.0.1      # load .env for the CLI/scripts outside the app process
+
+# ── dev / test ───────────────────────────────────────────────────────────────
+pytest==8.3.3
+pytest-asyncio==0.24.0    # async test support for provider/agent coroutines
