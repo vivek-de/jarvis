@@ -94,6 +94,27 @@ def main() -> int:
     d = route_decision("CODING", "anthropic:claude-x", "llama3.1:8b", has_key=True, under_cap=True)
     check("cloud with key + budget -> cloud allowed", d.provider == "anthropic" and not d.is_fallback)
 
+    print("[5] memory policy (Phase 2)")
+    from backend.memory.policy import should_remember  # stdlib-only import
+    check("secret never remembered", should_remember("my zerodha password is x").remember is False)
+    check("explicit remember", should_remember("remember I prefer short replies").remember is True)
+    check("preference", should_remember("always use IST, never notify at night").category == "preference")
+    check("decision", should_remember("I decided to keep momentum on paper till mid-oct").category == "decision")
+    check("deadline", should_remember("Amazon SDE-1 OA is on the 12th").category == "deadline")
+    check("project status", should_remember("MarketGPT is built but write-up pending").category == "project")
+    check("question not remembered", should_remember("what did I decide?").remember is False)
+    check("chatter not remembered", should_remember("ok cool thanks").remember is False)
+    check("correction wins (imp 5)", should_remember("actually the review is mid-nov").importance == 5)
+
+    print("[6] identity files (Phase 2) — content, not OS-derived")
+    idir = ROOT / "identity"
+    user_md = (idir / "USER.md").read_text(encoding="utf-8") if (idir / "USER.md").exists() else ""
+    soul_md = (idir / "SOUL.md").read_text(encoding="utf-8") if (idir / "SOUL.md").exists() else ""
+    check("USER.md exists + names Vivek", "Vivek" in user_md)
+    check("SOUL.md forbids OS-derived name", "never derive" in soul_md.lower() or "never infer" in soul_md.lower()
+          or "os login" in soul_md.lower())
+    check("SOUL.md carries read-only trading rule", "read-only" in soul_md.lower())
+
     db.close()
     print(f"\nSANDBOX CHECK: {_passed} passed, {_failed} failed")
     return 1 if _failed else 0

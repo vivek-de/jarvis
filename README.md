@@ -25,6 +25,13 @@ cp .env.example .env          # defaults are fine; edit only to add cloud keys
 ```
 
 ## Run the server
+
+Easiest — one command (ensures Ollama is running, then starts the API on :8100):
+```bash
+bash scripts/start.sh
+```
+
+Or manually:
 ```bash
 source .venv/bin/activate
 uvicorn backend.main:app --host 127.0.0.1 --port 8100

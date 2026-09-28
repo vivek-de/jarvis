@@ -11,6 +11,7 @@ import uuid
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from ..identity.loader import identity_status
 from ..logging_setup import get_logger, request_id_ctx
 
 router = APIRouter()
@@ -21,6 +22,7 @@ class ChatIn(BaseModel):
     message: str = Field(..., min_length=1, max_length=8000)
     session_id: str | None = None
     task_slot: str = "GENERAL"
+    channel: str = "web"       # web | cli | telegram | voice — controls output formatting
 
 
 @router.get("/health")
@@ -35,6 +37,7 @@ async def health(request: Request):
         "app": {"name": "jarvis", "version": settings.version, "env": settings.env},
         "db": {"ok": db_ok, "path": str(settings.db_file)},
         "ollama": ollama,
+        "identity": identity_status(),
         "spend_today_inr": app.state.spend.spent_today(),
         "spend_cap_inr": settings.daily_spend_cap_inr,
     }
@@ -47,7 +50,8 @@ async def chat(body: ChatIn, request: Request):
     agent = request.app.state.agent
     log.info("chat.request", extra={"task_slot": body.task_slot, "has_session": bool(body.session_id)})
     try:
-        out = await agent.chat(body.message, session_id=body.session_id, task_slot=body.task_slot)
+        out = await agent.chat(body.message, session_id=body.session_id,
+                               task_slot=body.task_slot, channel=body.channel)
     except Exception as e:  # never leak a stack trace to the client
         log.exception("chat.error")
         raise HTTPException(status_code=500, detail=f"chat failed: {e}")

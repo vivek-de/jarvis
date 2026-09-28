@@ -49,7 +49,9 @@ def main() -> int:
         if msg.lower() in ("exit", "quit"):
             return 0
         try:
-            r = httpx.post(f"{BASE}/chat", json={"message": msg, "session_id": session_id}, timeout=180)
+            r = httpx.post(f"{BASE}/chat",
+                           json={"message": msg, "session_id": session_id, "channel": "cli"},
+                           timeout=180)
             r.raise_for_status()
             data = r.json()
         except Exception as e:

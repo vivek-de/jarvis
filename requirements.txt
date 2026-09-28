@@ -1,13 +1,16 @@
 # JARVIS — Phase 1 Foundation dependencies
-# Justification for each (per DEVELOPMENT RULE 5: a dep must earn its place):
+# Justification for each (per DEVELOPMENT RULE 5: a dep must earn its place).
+# Pins are ">=" floors chosen for Python 3.13/3.14 compatibility — older exact
+# pins failed to build pydantic-core from source on 3.14 (no wheel). These floors
+# have prebuilt wheels; pip resolves to the newest compatible release.
 
-fastapi==0.115.5          # ASGI web framework — /health, /chat, typed request models
-uvicorn[standard]==0.32.1 # ASGI server to run FastAPI
-pydantic==2.9.2           # request/response validation (FastAPI dep, pinned)
-pydantic-settings==2.6.1  # 12-factor config from .env with typed validation
-httpx==0.27.2             # async HTTP client — Ollama /api/chat, later web/OptionIQ
-python-dotenv==1.0.1      # load .env for the CLI/scripts outside the app process
+fastapi>=0.117            # ASGI web framework — /health, /chat, typed request models
+uvicorn[standard]>=0.34   # ASGI server to run FastAPI
+pydantic>=2.12            # validation; 2.12+ ships cp313/cp314 wheels for pydantic-core
+pydantic-settings>=2.11   # 12-factor config from .env with typed validation
+httpx>=0.28               # async HTTP client — Ollama /api/chat, later web/OptionIQ
+python-dotenv>=1.0        # load .env for the CLI/scripts outside the app process
 
 # ── dev / test ───────────────────────────────────────────────────────────────
-pytest==8.3.3
-pytest-asyncio==0.24.0    # async test support for provider/agent coroutines
+pytest>=8.4
+pytest-asyncio>=0.25      # async test support for provider/agent coroutines
