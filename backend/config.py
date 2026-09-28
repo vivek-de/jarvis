@@ -104,6 +104,11 @@ class Settings(BaseSettings):
     telegram_chat_id: str = Field(
         "", validation_alias=AliasChoices("TELEGRAM_CHAT_ID", "JARVIS_TELEGRAM_CHAT_ID"))
 
+    # ── Voice (Phase 11) — all processing is local; no audio leaves the machine ─
+    voice_enabled: bool = True
+    whisper_model: str = "base"                    # openai-whisper model size
+    piper_voice: str = "en_US-lessac-medium"       # piper voice; macOS `say` is the fallback
+
     # ── derived helpers ──────────────────────────────────────────────────────
     @field_validator("log_level")
     @classmethod

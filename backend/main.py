@@ -16,6 +16,7 @@ from .agent.runtime import Agent
 from .api.docs import router as docs_router
 from .api.routes import router as api_router
 from .api.scheduler import router as scheduler_router
+from .api.voice import router as voice_router
 from .config import ROOT, Settings, get_settings
 from .database.db import DB, run_migrations
 from .docs.qa import DocQA
@@ -108,11 +109,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.mcp = mcp
         app.state.docs = docs
         app.state.docqa = docqa
+        # Voice (Phase 11): local STT/TTS + pipeline; construction is cheap (models
+        # load lazily on first use), so this never slows startup even if unused.
+        stt = tts = voice = None
+        if settings.voice_enabled:
+            from .voice.pipeline import VoicePipeline
+            from .voice.stt import WhisperSTT
+            from .voice.tts import PiperTTS
+            stt = WhisperSTT(settings.whisper_model)
+            tts = PiperTTS(settings.piper_voice)
+            voice = VoicePipeline(stt, tts, agent)
+
         app.state.tasks = tasks
         app.state.reminders = reminders
         app.state.scheduler = scheduler
         app.state.notifier = notifier
         app.state.telegram_bot = telegram_bot
+        app.state.stt = stt
+        app.state.tts = tts
+        app.state.voice = voice
         app.state.agent = agent
         log.info("startup", extra={
             "memory": memory.status(),
@@ -122,6 +137,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "docs": "enabled" if docs is not None else "disabled",
             "scheduler": "on" if settings.scheduler_enabled else "off",
             "telegram": "on" if settings.telegram_token else "off",
+            "voice": "on" if settings.voice_enabled else "off",
             "version": settings.version,
             "use_cases": settings.use_case_flags(),
             "slots": settings.task_slots,
@@ -148,6 +164,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(api_router)
     app.include_router(docs_router)
     app.include_router(scheduler_router)
+    app.include_router(voice_router)
     return app
 
 

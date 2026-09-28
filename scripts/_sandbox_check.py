@@ -490,6 +490,67 @@ def main() -> int:
     _before = len(_b.agent.calls); asyncio.run(_rl())
     check("bot rate-limits 2nd within 3s", len(_b.agent.calls) - _before == 1)
 
+    print("[16] voice (Phase 11 — stt/tts/pipeline; whisper/piper/subprocess mocked)")
+    import io as _io
+    import shutil as _shutil
+    import subprocess as _subprocess
+    import wave as _wave
+
+    from backend.voice import tts as _ttsmod
+    from backend.voice.pipeline import VoicePipeline
+    from backend.voice.stt import WhisperSTT
+    from backend.voice.tts import PiperTTS
+
+    def _mkwav(sec=0.5, rate=22050):
+        b = _io.BytesIO()
+        with _wave.open(b, "wb") as w:
+            w.setnchannels(1); w.setsampwidth(2); w.setframerate(rate)
+            w.writeframes(b"\x00\x00" * int(sec * rate))
+        return b.getvalue()
+
+    check("stt empty audio → error", "error" in WhisperSTT().transcribe(b"", "a.wav"))
+    _st = WhisperSTT()
+    check("stt unavailable → error", "error" in _st.transcribe(b"data", "a.wav"))
+    check("tts empty text → error", "error" in PiperTTS().synthesize("  "))
+    check("tts wav duration parse", PiperTTS._wav_duration(_mkwav(1.0)) == 1.0)
+
+    _cmds = []
+    def _fake_run(cmd, input=None, capture_output=None, timeout=None, check=None, **kw):
+        _cmds.append(cmd)
+        for flag in ("-o", "-f"):
+            if flag in cmd:
+                open(cmd[cmd.index(flag) + 1], "wb").write(_mkwav())
+        class _CP: returncode = 0
+        return _CP()
+    _orig_which, _orig_run = _shutil.which, _subprocess.run
+    try:
+        _shutil.which = lambda n: "/usr/bin/say" if n == "say" else None
+        _subprocess.run = _fake_run
+        _r = PiperTTS().synthesize("hello")
+        check("tts say-fallback returns wav", _r.get("format") == "wav" and len(_r["audio_bytes"]) > 44
+              and any("say" in c[0] for c in _cmds))
+        _shutil.which = lambda n: None
+        check("tts no backend → error", "error" in PiperTTS().synthesize("hi"))
+    finally:
+        _shutil.which, _subprocess.run = _orig_which, _orig_run
+
+    class _FSTT:
+        def __init__(self, out): self.out = out
+        def transcribe(self, a, filename="a.wav"): return self.out
+        def available(self): return True
+    class _FTTS:
+        def synthesize(self, t): return {"audio_bytes": _mkwav(), "format": "wav", "duration_s": 0.5}
+        def available(self): return True
+    class _FAgent:
+        async def chat(self, m, channel=None): return {"reply": f"you said {m}"}
+
+    _vp = VoicePipeline(_FSTT({"text": "hello", "language": "en", "duration_s": 1.0}), _FTTS(), _FAgent())
+    _pr = asyncio.run(_vp.process(b"audio", "a.wav"))
+    check("pipeline chains stt→agent→tts", _pr["transcript"] == "hello" and
+          _pr["response_text"] == "you said hello" and set(_pr["latency_ms"]) == {"stt", "agent", "tts"})
+    _pe = asyncio.run(VoicePipeline(_FSTT({"error": "x"}), _FTTS(), _FAgent()).process(b"a"))
+    check("pipeline stt error short-circuits", _pe["stage"] == "stt")
+
     db.close()
     print(f"\nSANDBOX CHECK: {_passed} passed, {_failed} failed")
     return 1 if _failed else 0

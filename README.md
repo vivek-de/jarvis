@@ -160,6 +160,16 @@ One message per 3s per user. The scheduler pushes fired reminders to Telegram vi
 `TelegramNotifier` (graceful: a Telegram outage never breaks the loop). Read-only over
 trading — the bot never places orders. Leave the vars blank to disable Telegram entirely.
 
+## Voice (Phase 11)
+Local speech in, spoken reply out — **all on-device**, no audio leaves the machine.
+STT is Whisper (`openai-whisper`, model `JARVIS_WHISPER_MODEL`, default `base`); TTS is
+Piper if installed, else the macOS `say` command. Endpoints at `/voice`:
+`POST /voice/transcribe` (audio→text), `POST /voice/speak` (text→wav),
+`POST /voice/chat` (audio→transcribe→agent→wav; transcript + reply in response headers),
+`GET /voice/status` (`{stt, tts, pipeline}`). Max upload 25MB; wav/mp3/m4a/ogg/webm.
+Whisper is an optional install (pulls PyTorch) — see `docs/VOICE_SETUP.md`. Disable with
+`JARVIS_VOICE_ENABLED=false`. Read-only over trading — voice never places orders.
+
 ## Layout
 ```
 backend/   config, logging, main (FastAPI)
