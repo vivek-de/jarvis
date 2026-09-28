@@ -34,7 +34,7 @@ def pcr_bias(pcr) -> str:
         p = float(pcr)
     except (TypeError, ValueError):
         return "n/a"
-    if p >= 1.3:
+    if p >= 1.2:
         return "bullish tilt (heavy put OI = support)"
     if p <= 0.7:
         return "bearish tilt (heavy call OI = resistance)"
