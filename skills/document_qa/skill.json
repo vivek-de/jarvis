@@ -1,0 +1,12 @@
+{
+  "name": "document_qa",
+  "description": "Answer questions from Vivek's uploaded documents (PDF/DOCX/XLSX/CSV/TXT/MD) using retrieval-augmented search, and list what's been uploaded.",
+  "triggers": ["in my docs", "in my documents", "from the document", "from my documents",
+               "search my files", "search my docs", "list my documents", "list my docs",
+               "my documents", "say about", "summarize the", "according to the document",
+               "what does the document"],
+  "instructions": "Answer strictly from the retrieved document excerpts. If nothing relevant is found, say so plainly — never invent facts, numbers, dates, or names. Cite the source file. Plain text.",
+  "allowed_tools": ["docs.search", "docs.list", "model.generate"],
+  "permissions": {"default": "READ"},
+  "io_schema": {"input": "natural language", "output": "text"}
+}

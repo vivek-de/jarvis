@@ -117,6 +117,24 @@ curl -s http://localhost:8100/tools | python3 -m json.tool         # all registe
 ```
 Full guide (adding a server, permission tiers, Brave Search example): `docs/ADDING_MCP_SERVERS.md`.
 
+## Document intelligence (Phase 8)
+Upload documents (PDF/DOCX/XLSX/CSV/TXT/MD, ≤10MB) and ask questions grounded in them.
+Text is chunked (~500 tokens, 100-char overlap; tables → `key: value` rows), embedded
+with `nomic-embed-text`, and stored in Postgres (`documents` + `doc_chunks`, cosine
+search). Uploads are deduplicated by SHA-256; a chunk whose embedding fails is stored
+without a vector (logged) rather than failing the upload. Answers are grounded strictly
+in retrieved chunks — no fabrication. Needs `JARVIS_DATABASE_URL` + Postgres (same DB as
+memory); if absent the `/docs` endpoints return 503. CORS allows `http://localhost:3001`
+so OptionIQ can call it.
+```bash
+curl -F 'file=@contract.pdf' http://localhost:8100/docs/upload
+curl -s -X POST http://localhost:8100/docs/query -H 'content-type: application/json' \
+     -d '{"query":"what is the notice period?","top_k":5}' | python3 -m json.tool
+curl -s http://localhost:8100/docs/list | python3 -m json.tool
+```
+Chat skill **document_qa** routes `in my docs` / `from the document` / `list my documents`
+/ `what does … say about …` to the same store.
+
 ## Layout
 ```
 backend/   config, logging, main (FastAPI)

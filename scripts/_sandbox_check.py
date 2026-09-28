@@ -316,6 +316,89 @@ def main() -> int:
     check("detect web_fetch url", (_detect("fetch https://economictimes.indiatimes.com") or {}).get("name") == "web_fetch")
     check("detect open url →fetch", (_detect("open url example.com") or {}).get("name") == "web_fetch")
 
+    print("[13] document intelligence (Phase 8 — parser / store / QA, PG+Ollama mocked)")
+    from backend.docs.parser import ParseError as _ParseError
+    from backend.docs.parser import parse_bytes, sha256_bytes
+    from backend.docs.qa import DocQA
+    from backend.docs.store import DocStore
+
+    _csv = parse_bytes(b"name,amount\nrent,5000\n", "b.csv")
+    check("parse csv → key:value", _csv and "name: rent" in _csv[0]["text"] and _csv[0]["doc_type"] == "csv")
+    _body = ("A" * 1500) + ("B" * 1500)
+    _txt = parse_bytes(_body.encode(), "f.txt")
+    check("txt chunks with 100 overlap", len(_txt) == 2 and _txt[0]["text"][-100:] == _txt[1]["text"][:100])
+    check("sha256 stable len 64", len(sha256_bytes(b"abc")) == 64 and sha256_bytes(b"abc") == sha256_bytes(b"abc"))
+    try:
+        parse_bytes(b"x", "m.exe"); _bad = False
+    except _ParseError:
+        _bad = True
+    check("unsupported type raises", _bad)
+
+    # mock pypdf
+    _pmod = _types.ModuleType("pypdf")
+    class _FP:
+        def __init__(self, t): self._t = t
+        def extract_text(self): return self._t
+    class _PdfReader:
+        def __init__(self, s): self.pages = [_FP("one"), _FP("two")]
+    _pmod.PdfReader = _PdfReader
+    _sys.modules["pypdf"] = _pmod
+    _pdf = parse_bytes(b"%PDF", "d.pdf")
+    check("parse pdf (mock) pages", len(_pdf) == 2 and _pdf[0]["page_ref"] == "p1")
+    _sys.modules.pop("pypdf", None)
+
+    # DocStore against a fake psycopg conn + fake embeddings
+    class _FakeCur:
+        def __init__(self, c): self.c = c; self._one = None; self._all = []; self.rowcount = 0
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def execute(self, sql, params=None):
+            self.c.calls.append((sql, params)); self._one, self._all, self.rowcount = self.c.h(sql, params)
+        def fetchone(self): return self._one
+        def fetchall(self): return self._all
+    class _FakeConn:
+        def __init__(self, h=None): self.h = h or (lambda s, p: (None, [], 0)); self.calls = []
+        def cursor(self): return _FakeCur(self)
+    class _FakeEmb:
+        def __init__(self, fail=False): self.fail = fail
+        async def embed(self, t):
+            if self.fail: raise RuntimeError("down")
+            return [0.1] * 768
+    _ch = [{"text": f"c{i}", "chunk_index": i, "page_ref": None, "doc_type": "txt"} for i in range(3)]
+
+    def _dedup_h(sql, p):
+        return (("existing", 4), [], 0) if "WHERE file_hash" in sql else (None, [], 0)
+    _d = asyncio.run(DocStore(_FakeConn(_dedup_h), _FakeEmb()).add_document("f", _ch, file_hash="x"))
+    check("dedup skips re-upload", _d["skipped"] is True and _d["doc_id"] == "existing")
+
+    _c2 = _FakeConn()
+    _r2 = asyncio.run(DocStore(_c2, _FakeEmb()).add_document("f", _ch, file_hash="x"))
+    check("add embeds + inserts chunks", _r2["embedded"] == 3 and
+          len([c for c in _c2.calls if "INSERT INTO doc_chunks" in c[0]]) == 3)
+
+    _sf = DocStore(_FakeConn(), _FakeEmb(fail=True))
+    _r3 = asyncio.run(_sf.add_document("f", [_ch[0]], file_hash="x"))
+    check("embed failure → NULL chunk", _r3["embedded"] == 0 and
+          "NULL" in [c for c in _sf.conn.calls if "INSERT INTO doc_chunks" in c[0]][0][0])
+
+    def _search_h(sql, p):
+        if "JOIN documents" in sql:
+            return (None, [("d1", "f.pdf", 0, "A", "p1", 0.91)], 0)
+        return (None, [], 0)
+    _hits = asyncio.run(DocStore(_FakeConn(_search_h), _FakeEmb()).search("q"))
+    check("search ranked results", len(_hits) == 1 and _hits[0]["similarity"] == 0.91)
+
+    def _del_h(sql, p):
+        return (None, [], 1) if "DELETE FROM documents" in sql else (None, [], 0)
+    check("delete returns rowcount", DocStore(_FakeConn(_del_h), _FakeEmb()).delete_document("d1") == 1)
+
+    async def _gen_fenced(_):
+        return '```json\n{"dates":["2026-01-01"],"amounts":[],"names":["Vivek"],"key_terms":[]}\n```'
+    _ex = asyncio.run(DocQA(_gen_fenced).extract_fields("t"))
+    check("qa extract_fields parses fenced JSON", _ex.get("dates") == ["2026-01-01"] and _ex.get("names") == ["Vivek"])
+    _noctx = asyncio.run(DocQA(lambda m: None).answer("q", []) if False else DocQA(_gen_fenced).answer("q", []))
+    check("qa answer no-context guard", _noctx["sources"] == [] and "don't have" in _noctx["answer"].lower())
+
     db.close()
     print(f"\nSANDBOX CHECK: {_passed} passed, {_failed} failed")
     return 1 if _failed else 0

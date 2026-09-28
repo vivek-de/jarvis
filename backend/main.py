@@ -10,11 +10,15 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from .agent.runtime import Agent
+from .api.docs import router as docs_router
 from .api.routes import router as api_router
 from .config import ROOT, Settings, get_settings
 from .database.db import DB, run_migrations
+from .docs.qa import DocQA
+from .docs.store import DocStore
 from .logging_setup import get_logger, setup_logging
 from .mcp.registry import MCPRegistry
 from .memory.service import MemoryService
@@ -53,6 +57,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             except Exception:
                 log.exception("mcp.startup_error")
 
+        # Document intelligence (Phase 8): shares the memory DB; None if DB/psycopg absent.
+        docs = DocStore.create(settings)
+
+        async def _doc_generate(messages):
+            result, _ = await router.generate("GENERAL", messages)
+            return result.text if result.success else ""
+
+        docqa = DocQA(_doc_generate)
+
         agent = Agent(db, router, memory=memory, skills=skills, settings=settings,
                       usd_inr_rate=settings.usd_inr_rate, memory_top_k=settings.memory_retrieve_top_k)
         app.state.settings = settings
@@ -63,12 +76,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.skills = skills
         app.state.tools = TOOL_REGISTRY
         app.state.mcp = mcp
+        app.state.docs = docs
+        app.state.docqa = docqa
         app.state.agent = agent
         log.info("startup", extra={
             "memory": memory.status(),
             "skills": [s["name"] for s in skills.list_skills()],
             "tools": [t["name"] for t in TOOL_REGISTRY.list_all()],
             "mcp": mcp.get_server_status(),
+            "docs": "enabled" if docs is not None else "disabled",
             "version": settings.version,
             "use_cases": settings.use_case_flags(),
             "slots": settings.task_slots,
@@ -81,8 +97,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             log.info("shutdown")
 
     app = FastAPI(title="JARVIS", version=settings.version, lifespan=lifespan)
+    # CORS: allow the local OptionIQ frontend to call the document API.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:3001"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.add_middleware(RateLimitMiddleware, per_minute=settings.rate_limit_per_min)
     app.include_router(api_router)
+    app.include_router(docs_router)
     return app
 
 
