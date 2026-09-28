@@ -151,6 +151,15 @@ Chat skill **automation** parses natural language: "remind me at 9am every day t
 markets", "remind me in 30 minutes to call Roshan", "every morning give me my schedule".
 Disable the loop with `JARVIS_SCHEDULER_ENABLED=false`.
 
+## Telegram (Phase 10)
+Optional chat channel. Set `TELEGRAM_TOKEN` + `TELEGRAM_CHAT_ID` (see
+`docs/TELEGRAM_SETUP.md`) and JARVIS starts a bot that serves **only** that one chat —
+every other chat is silently ignored. `/start` welcomes; `/reminders` and `/tasks` show
+your scheduler state; any other text is routed to the agent (`channel="telegram"`).
+One message per 3s per user. The scheduler pushes fired reminders to Telegram via
+`TelegramNotifier` (graceful: a Telegram outage never breaks the loop). Read-only over
+trading — the bot never places orders. Leave the vars blank to disable Telegram entirely.
+
 ## Layout
 ```
 backend/   config, logging, main (FastAPI)

@@ -29,6 +29,7 @@ from .scheduler.engine import SchedulerEngine
 from .scheduler.reminders import ReminderStore
 from .scheduler.store import TaskStore
 from .security.ratelimit import RateLimitMiddleware
+from .telegram.notifier import TelegramNotifier
 from .skills.registry import SkillRegistry
 from .tools import TOOL_REGISTRY
 
@@ -73,13 +74,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         agent = Agent(db, router, memory=memory, skills=skills, settings=settings,
                       usd_inr_rate=settings.usd_inr_rate, memory_top_k=settings.memory_retrieve_top_k)
 
+        # Telegram (Phase 10): notifier pushes reminders; bot serves the one chat_id.
+        notifier = TelegramNotifier(settings.telegram_token, settings.telegram_chat_id)
+
         # Scheduler (Phase 9): SQLite-backed tasks + reminders; background loop optional.
         tasks = TaskStore(db.conn)
         reminders = ReminderStore(db.conn)
         scheduler = SchedulerEngine(tasks, reminders, agent=agent,
-                                    poll_seconds=settings.scheduler_poll_seconds)
+                                    poll_seconds=settings.scheduler_poll_seconds,
+                                    notifier=notifier if notifier.enabled else None)
         if settings.scheduler_enabled:
             await scheduler.start()
+
+        # Telegram bot: start in the background only if a token is configured.
+        telegram_bot = None
+        if settings.telegram_token:
+            from .telegram.bot import TelegramBot
+            telegram_bot = TelegramBot(settings.telegram_token, settings.telegram_chat_id,
+                                       agent=agent, task_store=tasks, reminder_store=reminders)
+            try:
+                await telegram_bot.start()
+            except Exception:
+                log.exception("telegram.start_error")
+                telegram_bot = None
 
         app.state.settings = settings
         app.state.db = db
@@ -94,6 +111,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.tasks = tasks
         app.state.reminders = reminders
         app.state.scheduler = scheduler
+        app.state.notifier = notifier
+        app.state.telegram_bot = telegram_bot
         app.state.agent = agent
         log.info("startup", extra={
             "memory": memory.status(),
@@ -102,6 +121,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "mcp": mcp.get_server_status(),
             "docs": "enabled" if docs is not None else "disabled",
             "scheduler": "on" if settings.scheduler_enabled else "off",
+            "telegram": "on" if settings.telegram_token else "off",
             "version": settings.version,
             "use_cases": settings.use_case_flags(),
             "slots": settings.task_slots,
@@ -109,6 +129,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             yield
         finally:
+            if telegram_bot is not None:
+                await telegram_bot.stop()
             await scheduler.stop()
             await mcp.shutdown()
             db.close()

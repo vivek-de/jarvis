@@ -19,6 +19,7 @@ pypdf>=4.0.0              # PDF text extraction for document intelligence (Phase
 python-docx>=1.1.0        # DOCX parsing (Phase 8)
 openpyxl>=3.1.0           # XLSX parsing (Phase 8)
 croniter>=2.0.0           # cron expression → next-run computation for the scheduler (Phase 9)
+python-telegram-bot>=21.0 # async Telegram bot (inbound commands + chat) (Phase 10)
 
 # ── dev / test ───────────────────────────────────────────────────────────────
 pytest>=8.4

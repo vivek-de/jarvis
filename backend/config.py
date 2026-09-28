@@ -11,7 +11,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import List
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # project root = jarvis/  (this file is jarvis/backend/config.py)
@@ -94,9 +94,15 @@ class Settings(BaseSettings):
     uc7_market_alerts: bool = False
     uc8_weekly_review: bool = False
 
-    # ── Channels (later phases) ──────────────────────────────────────────────
-    telegram_bot_token: str = ""
-    telegram_chat_id: str = ""
+    # ── Telegram channel (Phase 10) ─────────────────────────────────────────
+    # Read from the plain TELEGRAM_TOKEN / TELEGRAM_CHAT_ID env vars (BotFather gives
+    # the token; chat_id is the one authorized chat). JARVIS_-prefixed names also work
+    # for consistency with the rest of the config. Both optional → Telegram disabled.
+    telegram_token: str = Field(
+        "", validation_alias=AliasChoices("TELEGRAM_TOKEN", "JARVIS_TELEGRAM_TOKEN",
+                                          "JARVIS_TELEGRAM_BOT_TOKEN"))
+    telegram_chat_id: str = Field(
+        "", validation_alias=AliasChoices("TELEGRAM_CHAT_ID", "JARVIS_TELEGRAM_CHAT_ID"))
 
     # ── derived helpers ──────────────────────────────────────────────────────
     @field_validator("log_level")

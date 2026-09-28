@@ -452,6 +452,44 @@ def main() -> int:
           _ts.get_task(_et["id"])["last_run"] is not None)
     _sc.close()
 
+    print("[15] telegram (Phase 10 — notifier gating / bot auth+routing; no PTB/httpx)")
+    from backend.telegram.bot import TelegramBot, format_reminders, format_tasks
+    from backend.telegram.notifier import TelegramNotifier
+
+    check("notifier disabled without token", TelegramNotifier("", "9").enabled is False)
+    check("notifier disabled without chat", TelegramNotifier("t", "").enabled is False)
+    check("notifier skip returns False", asyncio.run(TelegramNotifier("", "9").send_message("x")) is False)
+    check("format reminders empty", "No pending" in format_reminders([]))
+    check("format reminders list", "• a" in format_reminders([{"message": "a"}]))
+    check("format tasks skips disabled",
+          "hi" in format_tasks([{"name": "on", "enabled": True, "action_type": "remind",
+                                 "trigger_type": "cron", "trigger_value": "0 9 * * *",
+                                 "action_payload": {"message": "hi"}}]))
+
+    class _Msg:
+        def __init__(self, text=""): self.text = text; self.sent = []
+        async def reply_text(self, t): self.sent.append(t)
+    class _O:
+        def __init__(self, i): self.id = i
+    class _Upd:
+        def __init__(self, cid, text="hi", uid=1):
+            self.effective_chat = _O(cid); self.effective_user = _O(uid); self.message = _Msg(text)
+    class _Agent:
+        def __init__(self): self.calls = []
+        async def chat(self, m, channel=None): self.calls.append((m, channel)); return {"reply": f"echo: {m}"}
+
+    _b = TelegramBot("TOK", "123", agent=_Agent())
+    _u1 = _Upd(999, "hi"); asyncio.run(_b.on_text(_u1))
+    check("bot ignores unauthorized chat", _u1.message.sent == [] and _b.agent.calls == [])
+    _u2 = _Upd(123, "hello"); asyncio.run(_b.on_text(_u2))
+    check("bot routes authorized → agent", _b.agent.calls == [("hello", "telegram")]
+          and _u2.message.sent == ["echo: hello"])
+
+    async def _rl():
+        await _b.on_text(_Upd(123, "a", uid=7)); await _b.on_text(_Upd(123, "b", uid=7))
+    _before = len(_b.agent.calls); asyncio.run(_rl())
+    check("bot rate-limits 2nd within 3s", len(_b.agent.calls) - _before == 1)
+
     db.close()
     print(f"\nSANDBOX CHECK: {_passed} passed, {_failed} failed")
     return 1 if _failed else 0

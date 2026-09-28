@@ -28,11 +28,12 @@ AGENT_TIMEOUT_S = 120
 
 class SchedulerEngine:
     def __init__(self, tasks: TaskStore, reminders: ReminderStore, agent=None,
-                 poll_seconds: int = 30):
+                 poll_seconds: int = 30, notifier=None):
         self.tasks = tasks
         self.reminders = reminders
         self.agent = agent
         self.poll_seconds = poll_seconds
+        self.notifier = notifier                 # optional TelegramNotifier (push on fire)
         self._task: asyncio.Task | None = None
         self._stop = asyncio.Event()
         self.message_queue: list[dict] = []      # used when no agent is wired
@@ -90,15 +91,27 @@ class SchedulerEngine:
 
         if action == "remind":
             self.reminders.add_reminder(message=message, scheduled_for=now, task_id=task["id"])
+            await self._push(f"⏰ Reminder: {message}")
             log.info("scheduler.reminded", extra={"task_id": task["id"]})
         elif action == "message":
+            text = message
             if self.agent is not None:
                 out = await asyncio.wait_for(
                     self.agent.chat(message, channel="scheduler"), timeout=AGENT_TIMEOUT_S)
-                self.reminders.add_reminder(message=out.get("reply", message),
-                                            scheduled_for=now, task_id=task["id"])
+                text = out.get("reply", message)
+                self.reminders.add_reminder(message=text, scheduled_for=now, task_id=task["id"])
             else:
                 self.message_queue.append({"message": message, "at": now, "task_id": task["id"]})
+            await self._push(text)
             log.info("scheduler.messaged", extra={"task_id": task["id"]})
         else:
             raise ValueError(f"unknown action_type: {action!r}")
+
+    async def _push(self, text: str) -> None:
+        """Best-effort push to Telegram; never breaks task execution."""
+        if self.notifier is None:
+            return
+        try:
+            await self.notifier.send_message(text)
+        except Exception as e:
+            log.warning("scheduler.notify_failed", extra={"error": str(e)})
