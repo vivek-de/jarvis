@@ -80,6 +80,10 @@ class Settings(BaseSettings):
     mcp_config_path: str = "mcp/servers.json"      # relative → resolved against ROOT
     mcp_startup_timeout_s: float = 20.0            # per-server start budget (never hang startup)
 
+    # ── Scheduler (Phase 9) ──────────────────────────────────────────────────
+    scheduler_enabled: bool = True                 # tests set False to skip the background loop
+    scheduler_poll_seconds: int = 30
+
     # ── Use-case toggles (all off in Phase 1) ────────────────────────────────
     uc1_morning_brief: bool = False
     uc2_kite_token_guard: bool = False

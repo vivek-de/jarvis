@@ -18,6 +18,7 @@ duckduckgo-search>=6.0.0  # keyless web search backend for web_search (Phase 7)
 pypdf>=4.0.0              # PDF text extraction for document intelligence (Phase 8)
 python-docx>=1.1.0        # DOCX parsing (Phase 8)
 openpyxl>=3.1.0           # XLSX parsing (Phase 8)
+croniter>=2.0.0           # cron expression → next-run computation for the scheduler (Phase 9)
 
 # ── dev / test ───────────────────────────────────────────────────────────────
 pytest>=8.4

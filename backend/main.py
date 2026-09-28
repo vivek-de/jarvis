@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .agent.runtime import Agent
 from .api.docs import router as docs_router
 from .api.routes import router as api_router
+from .api.scheduler import router as scheduler_router
 from .config import ROOT, Settings, get_settings
 from .database.db import DB, run_migrations
 from .docs.qa import DocQA
@@ -24,6 +25,9 @@ from .mcp.registry import MCPRegistry
 from .memory.service import MemoryService
 from .models.router import ModelRouter
 from .models.spend import SpendTracker
+from .scheduler.engine import SchedulerEngine
+from .scheduler.reminders import ReminderStore
+from .scheduler.store import TaskStore
 from .security.ratelimit import RateLimitMiddleware
 from .skills.registry import SkillRegistry
 from .tools import TOOL_REGISTRY
@@ -68,6 +72,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         agent = Agent(db, router, memory=memory, skills=skills, settings=settings,
                       usd_inr_rate=settings.usd_inr_rate, memory_top_k=settings.memory_retrieve_top_k)
+
+        # Scheduler (Phase 9): SQLite-backed tasks + reminders; background loop optional.
+        tasks = TaskStore(db.conn)
+        reminders = ReminderStore(db.conn)
+        scheduler = SchedulerEngine(tasks, reminders, agent=agent,
+                                    poll_seconds=settings.scheduler_poll_seconds)
+        if settings.scheduler_enabled:
+            await scheduler.start()
+
         app.state.settings = settings
         app.state.db = db
         app.state.spend = spend
@@ -78,6 +91,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.mcp = mcp
         app.state.docs = docs
         app.state.docqa = docqa
+        app.state.tasks = tasks
+        app.state.reminders = reminders
+        app.state.scheduler = scheduler
         app.state.agent = agent
         log.info("startup", extra={
             "memory": memory.status(),
@@ -85,6 +101,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "tools": [t["name"] for t in TOOL_REGISTRY.list_all()],
             "mcp": mcp.get_server_status(),
             "docs": "enabled" if docs is not None else "disabled",
+            "scheduler": "on" if settings.scheduler_enabled else "off",
             "version": settings.version,
             "use_cases": settings.use_case_flags(),
             "slots": settings.task_slots,
@@ -92,6 +109,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             yield
         finally:
+            await scheduler.stop()
             await mcp.shutdown()
             db.close()
             log.info("shutdown")
@@ -107,6 +125,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(RateLimitMiddleware, per_minute=settings.rate_limit_per_min)
     app.include_router(api_router)
     app.include_router(docs_router)
+    app.include_router(scheduler_router)
     return app
 
 

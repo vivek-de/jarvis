@@ -399,6 +399,59 @@ def main() -> int:
     _noctx = asyncio.run(DocQA(lambda m: None).answer("q", []) if False else DocQA(_gen_fenced).answer("q", []))
     check("qa answer no-context guard", _noctx["sources"] == [] and "don't have" in _noctx["answer"].lower())
 
+    print("[14] scheduler (Phase 9 — store / due / reminders / parse / engine; croniter optional)")
+    import sqlite3 as _sqlite
+    from datetime import timedelta as _td
+
+    from backend.scheduler.engine import SchedulerEngine
+    from backend.scheduler.nlp import parse_schedule
+    from backend.scheduler.reminders import ReminderStore
+    from backend.scheduler.store import TaskStore
+    from backend.scheduler.triggers import compute_next_run, now_ist, parse_dt
+
+    _sc = _sqlite.connect(":memory:"); _sc.row_factory = _sqlite.Row
+    _ts = TaskStore(_sc)
+    _t = _ts.create_task("check", "interval", "3600", "remind", action_payload={"message": "hi"})
+    check("create+get task", _ts.get_task(_t["id"])["action_payload"] == {"message": "hi"})
+    check("update disable", _ts.update_task(_t["id"], enabled=False)["enabled"] is False)
+    _past = (now_ist() - _td(minutes=5)).isoformat()
+    _future = (now_ist() + _td(hours=1)).isoformat()
+    _due = _ts.create_task("due", "interval", "3600", "remind", next_run=_past)
+    _nd = _ts.create_task("later", "interval", "3600", "remind", next_run=_future)
+    _dueids = {t["id"] for t in _ts.get_due_tasks(now_ist().isoformat())}
+    check("get_due_tasks filters", _due["id"] in _dueids and _nd["id"] not in _dueids)
+    check("delete task", _ts.delete_task(_due["id"]) == 1)
+
+    check("next_run interval", compute_next_run("interval", "60",
+          after=parse_dt("2026-01-01T08:00:00")).startswith("2026-01-01T08:01:00"))
+    check("next_run once past → None", compute_next_run("once", (now_ist() - _td(hours=1)).isoformat()) is None)
+
+    _rs = ReminderStore(_sc)
+    _rid = _rs.add_reminder("ping", scheduled_for=_past)
+    check("reminder pending then delivered", len(_rs.get_pending_reminders()) >= 1 and
+          _rs.mark_delivered(_rid) == 1)
+    _rs.add_reminder("later", scheduled_for=_future)
+    check("future reminder not pending", all(r["message"] != "later" for r in _rs.get_pending_reminders()))
+
+    _p1 = parse_schedule("remind me at 9am every day to check markets")
+    check("parse daily cron", _p1["trigger_type"] == "cron" and _p1["trigger_value"] == "0 9 * * *"
+          and _p1["action_payload"]["message"] == "check markets")
+    _p2 = parse_schedule("remind me in 30 minutes to call Roshan")
+    check("parse relative once", _p2["trigger_type"] == "once" and
+          _p2["action_payload"]["message"] == "call Roshan" and parse_dt(_p2["trigger_value"]) > now_ist())
+    _p3 = parse_schedule("every morning give me my schedule")
+    check("parse morning message", _p3["trigger_type"] == "cron" and _p3["trigger_value"] == "0 9 * * 1-5"
+          and _p3["action_type"] == "message")
+    check("parse gibberish → None", parse_schedule("what's the weather like today") is None)
+
+    _eng = SchedulerEngine(_ts, _rs, agent=None)
+    _et = _ts.create_task("r", "once", _past, "remind", action_payload={"message": "check markets"}, next_run=_past)
+    _ran = asyncio.run(_eng.tick())
+    check("engine tick runs due remind", _ran >= 1 and
+          any(r["message"] == "check markets" for r in _rs.get_pending_reminders()) and
+          _ts.get_task(_et["id"])["last_run"] is not None)
+    _sc.close()
+
     db.close()
     print(f"\nSANDBOX CHECK: {_passed} passed, {_failed} failed")
     return 1 if _failed else 0

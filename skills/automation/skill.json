@@ -1,0 +1,11 @@
+{
+  "name": "automation",
+  "description": "Create reminders and scheduled tasks from natural language (cron / interval / one-shot), and list what's scheduled.",
+  "triggers": ["remind me", "set a reminder", "reminder", "every morning", "each morning",
+               "every day", "everyday", "every day at", "every week", "weekly", "schedule",
+               "list my reminders", "list my tasks", "my reminders"],
+  "instructions": "Turn Vivek's request into a scheduled task. Confirm what was scheduled in one plain-text line (what, when, action). If you can't parse a time, say so and ask for a clearer one. Never schedule anything that trades or moves money.",
+  "allowed_tools": ["scheduler.tasks", "model.generate"],
+  "permissions": {"default": "WRITE"},
+  "io_schema": {"input": "natural language", "output": "text"}
+}

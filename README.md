@@ -135,6 +135,22 @@ curl -s http://localhost:8100/docs/list | python3 -m json.tool
 Chat skill **document_qa** routes `in my docs` / `from the document` / `list my documents`
 / `what does … say about …` to the same store.
 
+## Automation / scheduler (Phase 9)
+Schedule reminders and recurring actions. A background loop (poll 30s, IST) runs due
+tasks and updates their next-run. Trigger types: `cron` (croniter), `interval` (seconds),
+`once` (ISO datetime). Actions: `remind` (writes a reminder) and `message` (runs the
+payload through JARVIS and stores the reply). Tasks + reminders live in SQLite
+(`003_scheduler.sql`); the loop only touches JARVIS's own tables — it never trades.
+```bash
+curl -s -X POST http://localhost:8100/tasks -H 'content-type: application/json' \
+  -d '{"name":"markets","trigger_type":"cron","trigger_value":"0 9 * * *","action_type":"remind","action_payload":{"message":"check markets"}}'
+curl -s http://localhost:8100/tasks | python3 -m json.tool
+curl -s http://localhost:8100/reminders/pending | python3 -m json.tool   # returns + marks delivered
+```
+Chat skill **automation** parses natural language: "remind me at 9am every day to check
+markets", "remind me in 30 minutes to call Roshan", "every morning give me my schedule".
+Disable the loop with `JARVIS_SCHEDULER_ENABLED=false`.
+
 ## Layout
 ```
 backend/   config, logging, main (FastAPI)
