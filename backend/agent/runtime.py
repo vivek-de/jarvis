@@ -54,24 +54,35 @@ class Agent:
         # ── 2. skill? select by trigger and run its handler ──────────────────
         skill = self.skills.select(message) if self.skills else None
         if skill is not None:
+            import asyncio
+
+            from ..logging_setup import get_logger
+            from ..skills.registry import SkillContext
+            ctx = SkillContext(settings=self.settings, db=self.db, memory=self.memory,
+                               router=self.router, channel=channel,
+                               extras={"skill_instructions": skill.instructions})
+            ok, reply, err = True, "", None
             try:
-                from ..skills.registry import SkillContext
-                ctx = SkillContext(settings=self.settings, db=self.db, memory=self.memory,
-                                   router=self.router, channel=channel,
-                                   extras={"skill_instructions": skill.instructions})
-                out = await skill.handler(ctx, message)
+                # hard cap so a slow/hanging skill (e.g. a stuck OptionIQ fetch) can never
+                # hang the request; mock-interview LLM turns get more room.
+                budget = 90 if skill.name == "placement_prep" else 30
+                out = await asyncio.wait_for(skill.handler(ctx, message), timeout=budget)
                 reply = out.get("reply", "(skill returned no reply)")
-                self.db.add_message(session_id, "assistant", reply)
-                self.db.touch_conversation(session_id)
-                return {"session_id": session_id, "reply": reply,
-                        "trace": {"task_slot": "SKILL", "provider": "skill", "model": skill.name,
-                                  "sub": out.get("sub"), "is_fallback": False, "notice": None,
-                                  "latency_ms": 0, "prompt_tokens": 0, "completion_tokens": 0,
-                                  "cost_inr": 0.0, "success": True, "error": None}}
-            except Exception as e:  # a broken skill must not break chat — fall through
-                from ..logging_setup import get_logger
+            except asyncio.TimeoutError:
+                ok, err = False, f"{skill.name} timed out"
+                reply = f"⚠️ The {skill.name} skill timed out — check the data source and try again."
+            except Exception as e:  # surface the REAL error; do NOT fall through to the LLM
+                ok, err = False, str(e)
+                reply = f"⚠️ {skill.name} error: {e}"
                 get_logger("jarvis.skills").warning("skill.handler_failed",
                                                     extra={"skill": skill.name, "error": str(e)})
+            self.db.add_message(session_id, "assistant", reply)
+            self.db.touch_conversation(session_id)
+            return {"session_id": session_id, "reply": reply,
+                    "trace": {"task_slot": "SKILL", "provider": "skill", "model": skill.name,
+                              "sub": (out.get("sub") if ok else "error"), "is_fallback": False,
+                              "notice": None, "latency_ms": 0, "prompt_tokens": 0,
+                              "completion_tokens": 0, "cost_inr": 0.0, "success": ok, "error": err}}
 
         # ── 3. normal turn ────────────────────────────────────────────────────
         mem_hits = []

@@ -142,7 +142,7 @@ def main() -> int:
 
     print("[9] skills (Phase 4 — loading / selection / placement handler)")
     import asyncio
-    from backend.skills.registry import SkillContext, SkillRegistry
+    from backend.skills.registry import Skill, SkillContext, SkillRegistry
     reg = SkillRegistry.load()
     names = {s.name for s in reg.skills}
     check("loads placement_prep", "placement_prep" in names)
@@ -152,6 +152,11 @@ def main() -> int:
     check("route → project_memory", (reg.select("where did I leave OptionIQ") or _N()).name == "project_memory")
     check("route → trading_read", (reg.select("show my portfolio nav") or _N()).name == "trading_read")
     check("no skill for chatter", reg.select("tell me a joke about cats") is None)
+    # plural trigger must still route (the "my deadlines" hang was a plural miss)
+    check("plural route → placement_prep (my deadlines)", (reg.select("my deadlines") or _N()).name == "placement_prep")
+    check("plural does not over-match (nav != navigate)",
+          Skill(name="x", description="", triggers=["nav"], instructions="", allowed_tools=[],
+                permissions={}, io_schema={}, handler=None, dir=ROOT).score("please navigate home") == 0)
 
     # placement handler against a real temp sqlite (migration 002 already applied above)
     pskill = reg.by_name["placement_prep"]

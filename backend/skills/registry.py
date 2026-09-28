@@ -50,7 +50,9 @@ class Skill:
             t = t.lower().strip()
             if not t:
                 continue
-            if re.search(rf"(?<!\w){re.escape(t)}(?!\w)", q):
+            # word-start match allowing a plural suffix (s/es) so "deadline" matches
+            # "deadlines" but "nav" still won't match "navigate".
+            if re.search(rf"(?<!\w){re.escape(t)}(?:s|es)?(?!\w)", q):
                 hits += 1
         return hits
 

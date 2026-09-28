@@ -26,6 +26,14 @@ def test_dynamic_selection_routing():
     assert reg.select("tell me a joke about cats") is None       # no trigger → normal chat
 
 
+def test_plural_triggers_still_route():
+    # regression: "my deadlines" (plural) used to miss the "deadline" trigger and
+    # fall through to the LLM, hanging the request.
+    reg = SkillRegistry.load()
+    assert reg.select("my deadlines").name == "placement_prep"
+    assert reg.select("show my open deadlines").name == "placement_prep"
+
+
 def test_placement_handler_log_due_deadline(tmp_path):
     dbf = tmp_path / "p.db"
     run_migrations(dbf)
@@ -48,6 +56,33 @@ def test_placement_handler_log_due_deadline(tmp_path):
     r5 = asyncio.run(skill.handler(ctx, "struggled dijkstra topic:graphs"))
     assert "dijkstra" in r5["reply"].lower()
     assert "graphs" in db.dsa_stats()["weak_topics"]
+    db.close()
+
+
+def test_failing_skill_surfaces_error_no_llm_fallthrough(tmp_path):
+    # A broken/slow skill must return its real error, never fall through to the model.
+    from backend.agent.runtime import Agent
+    from backend.skills.registry import Skill, SkillRegistry
+
+    dbf = tmp_path / "a.db"
+    run_migrations(dbf)
+    db = DB(dbf)
+
+    async def boom(ctx, query):
+        raise RuntimeError("kaboom")
+
+    broken = Skill(name="broken", description="", triggers=["deadline"], instructions="",
+                   allowed_tools=[], permissions={}, io_schema={}, handler=boom, dir=tmp_path)
+
+    class RouterMustNotRun:
+        async def generate(self, *a, **k):
+            raise AssertionError("LLM was called — skill error should not fall through")
+
+    agent = Agent(db=db, router=RouterMustNotRun(), memory=None,
+                  skills=SkillRegistry([broken]), settings=None)
+    out = asyncio.run(agent.chat("my deadlines", channel="cli"))
+    assert "kaboom" in out["reply"]
+    assert out["trace"]["success"] is False
     db.close()
 
 
