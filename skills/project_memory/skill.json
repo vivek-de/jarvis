@@ -1,0 +1,11 @@
+{
+  "name": "project_memory",
+  "description": "Structured per-project memory — record and answer 'where did I leave X', 'what's pending on Y', 'why did we decide Z' across Vivek's projects.",
+  "triggers": ["project", "where did i leave", "where did we leave", "what's pending",
+               "whats pending", "pending on", "status of", "why did we decide",
+               "what did i decide", "update project", "note on"],
+  "instructions": "Answer project questions ONLY from stored memory. If nothing is on file, say 'I don't have that on file' — never invent project status. Update project memory only when Vivek states progress or a decision; never infer it.",
+  "allowed_tools": ["memory.read", "memory.write"],
+  "permissions": {"default": "READ", "writes": "WRITE"},
+  "io_schema": {"input": "natural language", "output": "text"}
+}

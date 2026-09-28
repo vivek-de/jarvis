@@ -20,6 +20,7 @@ from .memory.service import MemoryService
 from .models.router import ModelRouter
 from .models.spend import SpendTracker
 from .security.ratelimit import RateLimitMiddleware
+from .skills.registry import SkillRegistry
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -38,16 +39,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         spend = SpendTracker(db.conn, settings.daily_spend_cap_inr)
         router = ModelRouter(settings, spend)
         memory = MemoryService.create(settings)      # graceful no-op if PG/DATABASE_URL absent
-        agent = Agent(db, router, memory=memory, usd_inr_rate=settings.usd_inr_rate,
-                      memory_top_k=settings.memory_retrieve_top_k)
+        skills = SkillRegistry.load()
+        agent = Agent(db, router, memory=memory, skills=skills, settings=settings,
+                      usd_inr_rate=settings.usd_inr_rate, memory_top_k=settings.memory_retrieve_top_k)
         app.state.settings = settings
         app.state.db = db
         app.state.spend = spend
         app.state.router = router
         app.state.memory = memory
+        app.state.skills = skills
         app.state.agent = agent
         log.info("startup", extra={
             "memory": memory.status(),
+            "skills": [s["name"] for s in skills.list_skills()],
             "version": settings.version,
             "use_cases": settings.use_case_flags(),
             "slots": settings.task_slots,

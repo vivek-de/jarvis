@@ -73,6 +73,19 @@ Chat commands: `remember <X>`, `what do you know about <X>`, `forget <X>`,
 relevant memories into context and stores new durable facts per the Phase-2 policy.
 SQLite still holds conversation sessions; Postgres holds long-term memory only.
 
+## Skills (Phase 4)
+Skills live in `skills/<name>/` as `skill.json` (name, description, triggers,
+instructions, allowed_tools, permissions, io_schema) + `handler.py`
+(`async def handle(ctx, query)`). On startup the registry loads them; each turn
+JARVIS picks the best skill by trigger match and runs its handler, else falls back to
+normal chat. `GET /skills` lists them. Built-in:
+- **placement_prep** — `solved <p> topic:x difficulty:y`, `struggled <p>`, `what's due`,
+  `deadline <label> on YYYY-MM-DD`, `my deadlines`, `progress`, `mock interview on <topic>`.
+- **project_memory** — `update project <name>: <status>`, `where did I leave <name>`,
+  `what's pending on <name>` (backed by Phase-3 memory).
+- **trading_read** — read-only OptionIQ: portfolio NAV/P&L, momentum basket, Big Player,
+  Kite status. Never places or suggests trades.
+
 ## Layout
 ```
 backend/   config, logging, main (FastAPI)

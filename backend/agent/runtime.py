@@ -21,11 +21,13 @@ MAX_HISTORY_MESSAGES = 20
 
 
 class Agent:
-    def __init__(self, db: DB, router: ModelRouter, memory=None,
+    def __init__(self, db: DB, router: ModelRouter, memory=None, skills=None, settings=None,
                  usd_inr_rate: float = 88.0, memory_top_k: int = 5):
         self.db = db
         self.router = router
         self.memory = memory
+        self.skills = skills
+        self.settings = settings
         self.usd_inr = usd_inr_rate
         self.memory_top_k = memory_top_k
 
@@ -34,10 +36,12 @@ class Agent:
         if not session_id or not self.db.conversation_exists(session_id):
             session_id = self.db.create_conversation(title=message[:60])
 
+        # user message stored once for every path
+        self.db.add_message(session_id, "user", message)
+
         # ── 1. memory command? handle deterministically, no LLM ──────────────
         cmd = parse_command(message)
         if cmd and self.memory is not None:
-            self.db.add_message(session_id, "user", message)
             reply = await self._handle_command(cmd)
             self.db.add_message(session_id, "assistant", reply)
             self.db.touch_conversation(session_id)
@@ -47,9 +51,29 @@ class Agent:
                               "prompt_tokens": 0, "completion_tokens": 0, "cost_inr": 0.0,
                               "success": True, "error": None, "memory_command": cmd.kind}}
 
-        # ── 2. normal turn ────────────────────────────────────────────────────
-        self.db.add_message(session_id, "user", message)
+        # ── 2. skill? select by trigger and run its handler ──────────────────
+        skill = self.skills.select(message) if self.skills else None
+        if skill is not None:
+            try:
+                from ..skills.registry import SkillContext
+                ctx = SkillContext(settings=self.settings, db=self.db, memory=self.memory,
+                                   router=self.router, channel=channel,
+                                   extras={"skill_instructions": skill.instructions})
+                out = await skill.handler(ctx, message)
+                reply = out.get("reply", "(skill returned no reply)")
+                self.db.add_message(session_id, "assistant", reply)
+                self.db.touch_conversation(session_id)
+                return {"session_id": session_id, "reply": reply,
+                        "trace": {"task_slot": "SKILL", "provider": "skill", "model": skill.name,
+                                  "sub": out.get("sub"), "is_fallback": False, "notice": None,
+                                  "latency_ms": 0, "prompt_tokens": 0, "completion_tokens": 0,
+                                  "cost_inr": 0.0, "success": True, "error": None}}
+            except Exception as e:  # a broken skill must not break chat — fall through
+                from ..logging_setup import get_logger
+                get_logger("jarvis.skills").warning("skill.handler_failed",
+                                                    extra={"skill": skill.name, "error": str(e)})
 
+        # ── 3. normal turn ────────────────────────────────────────────────────
         mem_hits = []
         if self.memory is not None:
             mem_hits = await self.memory.retrieve_context(message, top_k=self.memory_top_k)

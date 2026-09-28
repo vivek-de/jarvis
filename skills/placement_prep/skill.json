@@ -1,0 +1,11 @@
+{
+  "name": "placement_prep",
+  "description": "DSA practice log with spaced repetition, mock-interview Q&A, and company deadline tracking for campus placements.",
+  "triggers": ["dsa", "leetcode", "problem", "solved", "struggled", "placement",
+               "oa", "online assessment", "interview", "coding round", "mock",
+               "quiz", "revise", "review", "due", "deadline", "progress"],
+  "instructions": "You are running Vivek's placement-prep coach. For mock interviews: ask ONE clear DSA or CS-fundamentals question at a time; when he answers, evaluate honestly — say if it's wrong or suboptimal, then give the correct approach with complexity. No flattery. Keep it tight and plain-text.",
+  "allowed_tools": ["db.placement", "model.generate"],
+  "permissions": {"default": "READ", "writes": "WRITE"},
+  "io_schema": {"input": "natural language", "output": "text"}
+}

@@ -39,6 +39,7 @@ async def health(request: Request):
         "ollama": ollama,
         "identity": identity_status(),
         "memory": app.state.memory.status(),
+        "skills": [s["name"] for s in app.state.skills.list_skills()],
         "spend_today_inr": app.state.spend.spent_today(),
         "spend_cap_inr": settings.daily_spend_cap_inr,
     }
@@ -61,6 +62,11 @@ async def chat(body: ChatIn, request: Request):
                                  "success": out["trace"]["success"],
                                  "latency_ms": out["trace"]["latency_ms"]})
     return out
+
+
+@router.get("/skills")
+async def list_skills(request: Request):
+    return {"skills": request.app.state.skills.list_skills()}
 
 
 @router.get("/conversations/{cid}")

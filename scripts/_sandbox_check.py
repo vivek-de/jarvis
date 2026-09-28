@@ -140,9 +140,36 @@ def main() -> int:
     check("002 has superseded_by", "superseded_by" in sql)
     check("002 tracks migrations", "memory_schema_migrations" in sql)
 
+    print("[9] skills (Phase 4 — loading / selection / placement handler)")
+    import asyncio
+    from backend.skills.registry import SkillContext, SkillRegistry
+    reg = SkillRegistry.load()
+    names = {s.name for s in reg.skills}
+    check("loads placement_prep", "placement_prep" in names)
+    check("loads project_memory", "project_memory" in names)
+    check("loads trading_read", "trading_read" in names)
+    check("route → placement_prep", (reg.select("solved two-sum topic:arrays") or _N()).name == "placement_prep")
+    check("route → project_memory", (reg.select("where did I leave OptionIQ") or _N()).name == "project_memory")
+    check("route → trading_read", (reg.select("show my portfolio nav") or _N()).name == "trading_read")
+    check("no skill for chatter", reg.select("tell me a joke about cats") is None)
+
+    # placement handler against a real temp sqlite (migration 002 already applied above)
+    pskill = reg.by_name["placement_prep"]
+    ctx = SkillContext(db=db, router=None, memory=None, settings=None)
+    r = asyncio.run(pskill.handler(ctx, "solved two-sum topic:arrays difficulty:easy"))
+    check("placement logs a solve", "two-sum" in r["reply"].lower() and db.dsa_stats()["total"] == 1)
+    r = asyncio.run(pskill.handler(ctx, "deadline Amazon OA on 2026-10-05"))
+    check("placement adds a deadline", "2026-10-05" in r["reply"])
+    r = asyncio.run(pskill.handler(ctx, "struggled dijkstra topic:graphs"))
+    check("placement flags weak topic", "graphs" in db.dsa_stats()["weak_topics"])
+
     db.close()
     print(f"\nSANDBOX CHECK: {_passed} passed, {_failed} failed")
     return 1 if _failed else 0
+
+
+class _N:  # tiny stand-in so a None select doesn't crash the .name access in checks
+    name = None
 
 
 if __name__ == "__main__":

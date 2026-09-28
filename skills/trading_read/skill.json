@@ -1,0 +1,10 @@
+{
+  "name": "trading_read",
+  "description": "Read-only OptionIQ queries — paper portfolio NAV/P&L, momentum basket, Big Player positioning, Kite auth status. Groundwork for the morning brief and alerts. Never places or suggests trades.",
+  "triggers": ["portfolio", "nav", "holdings", "journal", "pnl", "p&l", "momentum basket",
+               "basket", "big player", "kite", "token", "optioniq", "day pnl", "gainers", "losers"],
+  "instructions": "Report only what OptionIQ returns, with the value, and a note that it is not trading advice (survivorship/regime caveats apply). Read-only: never place, approve, or suggest a trade.",
+  "allowed_tools": ["optioniq.read"],
+  "permissions": {"default": "READ", "writes": "NONE", "financial": "READ_ONLY"},
+  "io_schema": {"input": "natural language", "output": "text"}
+}
