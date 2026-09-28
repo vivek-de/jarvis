@@ -9,14 +9,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import psycopg
-from pgvector.psycopg import register_vector
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
 
 
 def connect(database_url: str) -> psycopg.Connection:
     conn = psycopg.connect(database_url, autocommit=True)
-    register_vector(conn)
+    # Best-effort: registering pgvector adapters helps if we ever bind/read Vector
+    # objects, but the store binds embeddings via explicit ::vector casts, so a missing
+    # or mismatched pgvector build must NOT break the connection.
+    try:
+        from pgvector.psycopg import register_vector
+        register_vector(conn)
+    except Exception:
+        pass
     return conn
 
 

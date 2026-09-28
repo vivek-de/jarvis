@@ -25,19 +25,45 @@ class OllamaEmbeddings:
             raise EmbeddingError("empty text")
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
+                # legacy endpoint first ({prompt} -> {"embedding": [...]})
                 r = await client.post(f"{self.base_url}/api/embeddings",
                                       json={"model": self.model, "prompt": text})
+                vec = self._extract(r)
+                if vec is None:
+                    # newer endpoint ({input} -> {"embeddings": [[...]]})
+                    r2 = await client.post(f"{self.base_url}/api/embed",
+                                           json={"model": self.model, "input": text})
+                    vec = self._extract(r2)
+                    if vec is None:
+                        raise EmbeddingError(
+                            f"no embedding from Ollama (HTTP {r.status_code}/{r2.status_code}); "
+                            f"is '{self.model}' pulled? try `ollama pull {self.model}`")
+        except EmbeddingError:
+            raise
         except Exception as e:
             raise EmbeddingError(f"ollama embeddings unreachable: {e}") from e
-        if r.status_code != 200:
-            raise EmbeddingError(f"ollama embeddings HTTP {r.status_code}: {r.text[:160]}")
-        vec = (r.json() or {}).get("embedding")
-        if not isinstance(vec, list) or not vec:
-            raise EmbeddingError("no embedding in response")
+
         if self.dim and len(vec) != self.dim:
             raise EmbeddingError(f"embedding dim {len(vec)} != expected {self.dim} "
-                                 f"(is JARVIS_EMBED_MODEL='{self.model}' the 768-dim model?)")
+                                 f"(is JARVIS_EMBED_MODEL='{self.model}' the {self.dim}-dim model?)")
         return [float(x) for x in vec]
+
+    @staticmethod
+    def _extract(resp) -> list[float] | None:
+        """Pull a single embedding vector out of either Ollama response shape."""
+        if resp.status_code != 200:
+            return None
+        try:
+            data = resp.json() or {}
+        except Exception:
+            return None
+        v = data.get("embedding")
+        if isinstance(v, list) and v:
+            return v
+        vs = data.get("embeddings")
+        if isinstance(vs, list) and vs and isinstance(vs[0], list) and vs[0]:
+            return vs[0]
+        return None
 
     async def health(self) -> dict:
         try:

@@ -44,28 +44,34 @@ class MemoryService:
 
     # ── write ────────────────────────────────────────────────────────────────
     async def remember(self, content: str, category: str | None = None,
-                       source: str = "user", importance: float | None = None) -> dict | None:
+                       source: str = "user", importance: float | None = None) -> dict:
+        """Returns {ok, action, category, importance} on success, or {ok:False, error}."""
         if not self.enabled:
-            return None
+            return {"ok": False, "error": self.reason or "memory disabled"}
         category = (category or "fact").lower()
         try:
             vec = await self.embeddings.embed(content)
+        except EmbeddingError as e:
+            log.warning("memory.embed_failed", extra={"error": str(e)})
+            return {"ok": False, "error": f"embedding failed: {e}"}
+        try:
             imp = score_for(category, override=importance)
             res = self.store.add(content, category, vec, importance=imp, source=source)
             log.info("memory.stored", extra={"action": res.get("action"), "category": category, "importance": imp})
-            return {**res, "category": category, "importance": imp}
-        except (EmbeddingError, Exception) as e:  # never break a chat turn on a memory failure
-            log.warning("memory.remember_failed", extra={"error": str(e)})
-            return None
+            return {"ok": True, **res, "category": category, "importance": imp}
+        except Exception as e:  # DB/insert error — surface the real cause
+            log.warning("memory.store_failed", extra={"error": repr(e)})
+            return {"ok": False, "error": f"db error: {e}"}
 
     async def maybe_remember(self, text: str, source: str = "user") -> dict | None:
-        """Apply the Phase-2 policy; store only if it says so."""
+        """Apply the Phase-2 policy; store only if it says so. Failures are non-fatal."""
         if not self.enabled:
             return None
         decision = should_remember(text, source=source)
         if not decision.remember:
             return None
-        return await self.remember(text, category=decision.category, source=source)
+        res = await self.remember(text, category=decision.category, source=source)
+        return res if res.get("ok") else None
 
     # ── read ─────────────────────────────────────────────────────────────────
     async def recall(self, query: str, top_k: int = 5, min_similarity: float | None = None) -> list[dict]:

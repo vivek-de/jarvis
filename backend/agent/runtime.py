@@ -111,8 +111,8 @@ class Agent:
             decision = should_remember(cmd.arg)
             category = decision.category or "fact"
             res = await self.memory.remember(cmd.arg, category=category, source="user")
-            if not res:
-                return "Couldn't save that (embedding/DB unavailable)."
+            if not res.get("ok"):
+                return f"Couldn't save that — {res.get('error', 'unknown error')}."
             verb = "Updated an existing" if res.get("action") == "updated" else "Saved a new"
             return f"{verb} {res['category']} memory (importance {res['importance']:.2f})."
 
