@@ -61,6 +61,13 @@ async def chat(body: ChatIn, request: Request):
                                  "provider": out["trace"]["provider"],
                                  "success": out["trace"]["success"],
                                  "latency_ms": out["trace"]["latency_ms"]})
+    # Flat, dashboard-friendly fields alongside the full payload (back-compatible).
+    tr = out.get("trace", {})
+    out["response"] = out.get("reply", "")
+    out["tool_used"] = tr.get("tool_used")
+    out["skill"] = tr.get("model") if tr.get("task_slot") == "SKILL" else None
+    out["latency_ms"] = tr.get("latency_ms", 0)
+    out["cost_inr"] = tr.get("cost_inr", 0.0)
     return out
 
 

@@ -170,6 +170,20 @@ Piper if installed, else the macOS `say` command. Endpoints at `/voice`:
 Whisper is an optional install (pulls PyTorch) — see `docs/VOICE_SETUP.md`. Disable with
 `JARVIS_VOICE_ENABLED=false`. Read-only over trading — voice never places orders.
 
+## Web dashboard (Phase 12)
+A single-page React app (Vite + TypeScript, plain CSS, dark theme) served by FastAPI at
+`/app`. Tabs: **Chat** (text + voice, shows skill/tool/latency/cost), **Documents**
+(drag-drop upload, search, delete), **Tasks** (list, create, enable/disable, delete),
+**Reminders** (polls `/reminders/pending` every 30s), **Status** (health/Ollama/DB/memory/
+MCP, polls `/health` every 10s). Read/query only for trading — there is no order-entry UI.
+```bash
+cd frontend && npm install && npm run build   # produces frontend/dist/
+# then open http://localhost:8100/app
+npm run dev                                    # or dev server on :5173 (proxies to :8100)
+```
+`/chat` returns dashboard-friendly fields (`response, tool_used, skill, latency_ms,
+cost_inr`) alongside the full payload.
+
 ## Layout
 ```
 backend/   config, logging, main (FastAPI)

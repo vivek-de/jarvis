@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from .agent.runtime import Agent
 from .api.docs import router as docs_router
@@ -165,6 +166,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(docs_router)
     app.include_router(scheduler_router)
     app.include_router(voice_router)
+
+    # Phase 12: serve the built React dashboard at /app (SPA). Mounted only if the
+    # build output exists — `cd frontend && npm run build` produces it.
+    dist = ROOT / "frontend" / "dist"
+    if dist.exists():
+        app.mount("/app", StaticFiles(directory=str(dist), html=True), name="dashboard")
+        log.info("dashboard.mounted", extra={"path": "/app"})
+    else:
+        log.info("dashboard.not_built", extra={"hint": "cd frontend && npm run build"})
     return app
 
 
