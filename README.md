@@ -184,6 +184,27 @@ npm run dev                                    # or dev server on :5173 (proxies
 `/chat` returns dashboard-friendly fields (`response, tool_used, skill, latency_ms,
 cost_inr`) alongside the full payload.
 
+## Trading intelligence (Phase 13)
+READ-ONLY options analytics from OptionIQ (:3001). `OptionIQClient` fetches chain / PCR /
+OI buildup / IV / underlying (10s timeout, SSRF-guarded, never raises). `TradingIntelligence`
+summarises that into grounded text and answers questions as a read-only market analyst —
+never suggesting trades, never inventing numbers. Endpoints at `/trading`:
+```bash
+curl -s http://localhost:8100/trading/health
+curl -s http://localhost:8100/trading/pcr/NIFTY | python3 -m json.tool
+curl -s http://localhost:8100/trading/snapshot/BANKNIFTY
+curl -s -X POST http://localhost:8100/trading/query -H 'content-type: application/json' \
+     -d '{"query":"where is the max pain?","symbol":"NIFTY"}'
+```
+Any write verb (PUT/PATCH/DELETE) to `/trading/*` is refused with 403 and logged CRITICAL —
+there is no order-entry path anywhere. Chat skill **trading_intel** routes chain/PCR/OI/IV
+questions to the same analyst. If OptionIQ is offline, answers say the live data is
+unavailable. Disable with `JARVIS_TRADING_ENABLED=false`.
+
+## OptionIQ Assistant tab
+OptionIQ embeds the JARVIS dashboard as an **Assistant** tab (🤖) — an iframe to
+`http://localhost:8100/app` with an online/offline status dot. Query/display only.
+
 ## Layout
 ```
 backend/   config, logging, main (FastAPI)

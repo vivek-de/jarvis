@@ -17,6 +17,7 @@ from .agent.runtime import Agent
 from .api.docs import router as docs_router
 from .api.routes import router as api_router
 from .api.scheduler import router as scheduler_router
+from .api.trading import router as trading_router
 from .api.voice import router as voice_router
 from .config import ROOT, Settings, get_settings
 from .database.db import DB, run_migrations
@@ -110,6 +111,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.mcp = mcp
         app.state.docs = docs
         app.state.docqa = docqa
+        # Trading intelligence (Phase 13): READ-ONLY OptionIQ client + summariser.
+        trading_client = trading_intel = None
+        if settings.trading_enabled:
+            from .trading.client import OptionIQClient
+            from .trading.intelligence import TradingIntelligence
+
+            async def _trading_generate(messages):
+                result, _ = await router.generate("GENERAL", messages)
+                return result.text if result.success else ""
+
+            trading_client = OptionIQClient(base=settings.optioniq_base,
+                                            allowlist=settings.ssrf_allowlist_set)
+            trading_intel = TradingIntelligence(trading_client, generate=_trading_generate)
+            try:
+                up = await trading_client.healthcheck()
+                log.info("trading.optioniq", extra={"reachable": up})
+                if not up:
+                    log.warning("trading.optioniq_unreachable",
+                                extra={"base": settings.optioniq_base})
+            except Exception:
+                log.warning("trading.healthcheck_error", extra={"base": settings.optioniq_base})
+
         # Voice (Phase 11): local STT/TTS + pipeline; construction is cheap (models
         # load lazily on first use), so this never slows startup even if unused.
         stt = tts = voice = None
@@ -129,6 +152,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.stt = stt
         app.state.tts = tts
         app.state.voice = voice
+        app.state.trading_client = trading_client
+        app.state.trading_intel = trading_intel
         app.state.agent = agent
         log.info("startup", extra={
             "memory": memory.status(),
@@ -139,6 +164,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "scheduler": "on" if settings.scheduler_enabled else "off",
             "telegram": "on" if settings.telegram_token else "off",
             "voice": "on" if settings.voice_enabled else "off",
+            "trading": "on" if settings.trading_enabled else "off",
             "version": settings.version,
             "use_cases": settings.use_case_flags(),
             "slots": settings.task_slots,
@@ -154,10 +180,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             log.info("shutdown")
 
     app = FastAPI(title="JARVIS", version=settings.version, lifespan=lifespan)
-    # CORS: allow the local OptionIQ frontend to call the document API.
+    # CORS: allow the local OptionIQ frontend (and its dev server) to call JARVIS.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3001"],
+        allow_origins=["http://localhost:3001", "http://localhost:8173", "http://localhost:5173"],
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -166,6 +192,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(docs_router)
     app.include_router(scheduler_router)
     app.include_router(voice_router)
+    app.include_router(trading_router)
 
     # Phase 12: serve the built React dashboard at /app (SPA). Mounted only if the
     # build output exists — `cd frontend && npm run build` produces it.

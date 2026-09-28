@@ -551,6 +551,40 @@ def main() -> int:
     _pe = asyncio.run(VoicePipeline(_FSTT({"error": "x"}), _FTTS(), _FAgent()).process(b"a"))
     check("pipeline stt error short-circuits", _pe["stage"] == "stt")
 
+    print("[17] trading intelligence (Phase 13 — READ-ONLY; OptionIQ mocked, no httpx)")
+    from backend.trading.intelligence import TradingIntelligence, pcr_bias
+    check("pcr_bias bullish", "bullish" in pcr_bias(1.4))
+    check("pcr_bias bearish", "bearish" in pcr_bias(0.5))
+    check("pcr_bias neutral", pcr_bias(1.0) == "neutral")
+    check("pcr_bias n/a", pcr_bias(None) == "n/a")
+
+    _CHAIN = {"spot": 24000, "atm": 24000, "expiry": "2026-10-09", "pcr": 1.25, "chain": [
+        {"strike": 23800, "CE": {"oi": 50}, "PE": {"oi": 900}},
+        {"strike": 24100, "CE": {"oi": 700}, "PE": {"oi": 150}},
+        {"strike": 24200, "CE": {"oi": 950}, "PE": {"oi": 80}}]}
+    class _FakeIQ:
+        def __init__(self, fail=False): self.fail = fail
+        async def get_chain(self, s, e=None): return {"error": "down"} if self.fail else _CHAIN
+        async def get_oi_buildup(self, s): return {"maxPain": 24000}
+        async def get_iv(self, s): return {"atmIV": 12.5}
+    _cap = {}
+    async def _gen(msgs): _cap["m"] = msgs; return "PCR is 1.25 per the data."
+    _ti = TradingIntelligence(_FakeIQ(), generate=_gen)
+    _cs = asyncio.run(_ti.chain_summary("NIFTY"))
+    check("chain_summary has strikes+pcr+maxpain",
+          "24200" in _cs and "PCR: 1.25" in _cs and "Max-pain strike: 24000" in _cs)
+    _sn = asyncio.run(_ti.market_snapshot("NIFTY"))
+    check("market_snapshot has spot+iv+pcr", "24000" in _sn and "12.5" in _sn and "PCR: 1.25" in _sn)
+    _ans = asyncio.run(_ti.answer_query("what is pcr?", "NIFTY"))
+    check("answer_query grounded + read-only system", "1.25" in _ans and
+          "read-only" in _cap["m"][0]["content"].lower() and "PCR: 1.25" in _cap["m"][1]["content"])
+    _off = asyncio.run(TradingIntelligence(_FakeIQ(fail=True), generate=_gen).chain_summary("NIFTY"))
+    check("chain_summary degrades offline", "unavailable" in _off.lower())
+
+    _treg = SkillRegistry.load()
+    check("route → trading_intel", (_treg.select("what's the PCR on NIFTY") or _N()).name == "trading_intel")
+    check("trading_read still routes", (_treg.select("show my portfolio nav and day pnl") or _N()).name == "trading_read")
+
     db.close()
     print(f"\nSANDBOX CHECK: {_passed} passed, {_failed} failed")
     return 1 if _failed else 0

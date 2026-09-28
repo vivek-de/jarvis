@@ -27,6 +27,7 @@ def settings(tmp_path) -> Settings:
         rate_limit_per_min=1000,
         mcp_enabled=False,        # never launch MCP subprocesses during tests
         scheduler_enabled=False,  # never start the background scheduler loop during tests
+        trading_enabled=False,    # skip the OptionIQ startup healthcheck during tests
     )
 
 

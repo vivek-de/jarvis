@@ -74,6 +74,8 @@ class Settings(BaseSettings):
 
     # ── OptionIQ (read-only; Phase 13) ───────────────────────────────────────
     optioniq_base_url: str = "http://localhost:3001"
+    optioniq_base: str = "http://localhost:3001"   # Phase 13 trading client base
+    trading_enabled: bool = True
 
     # ── MCP servers (Phase 6) ────────────────────────────────────────────────
     mcp_enabled: bool = True                       # tests set False to skip subprocess launch

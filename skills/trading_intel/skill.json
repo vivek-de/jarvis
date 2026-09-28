@@ -1,0 +1,11 @@
+{
+  "name": "trading_intel",
+  "description": "Read-only options analytics from OptionIQ — option chain, PCR, OI buildup, IV, max-pain — summarised and answered as a market analyst. Never suggests or places trades.",
+  "triggers": ["chain", "option chain", "pcr", "put-call", "put call", "oi", "open interest",
+               "iv", "implied vol", "options", "nifty", "banknifty", "finnifty", "calls", "puts",
+               "max pain", "max-pain", "snapshot", "strike"],
+  "instructions": "Report only what OptionIQ returns via TradingIntelligence. Never invent prices, strikes, OI, or IV. Read-only market analyst: never suggest, recommend, or imply a trade. If OptionIQ is offline, say the live data is unavailable.",
+  "allowed_tools": ["optioniq.read", "model.generate"],
+  "permissions": {"default": "READ", "writes": "NONE", "financial": "READ_ONLY"},
+  "io_schema": {"input": "natural language", "output": "text"}
+}
