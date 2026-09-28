@@ -25,6 +25,7 @@ def settings(tmp_path) -> Settings:
         ollama_base_url="http://localhost:11434",
         ollama_model="llama3.1:8b",
         rate_limit_per_min=1000,
+        mcp_enabled=False,      # never launch MCP subprocesses during tests
     )
 
 

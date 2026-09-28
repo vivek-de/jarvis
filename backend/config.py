@@ -75,6 +75,11 @@ class Settings(BaseSettings):
     # ── OptionIQ (read-only; Phase 13) ───────────────────────────────────────
     optioniq_base_url: str = "http://localhost:3001"
 
+    # ── MCP servers (Phase 6) ────────────────────────────────────────────────
+    mcp_enabled: bool = True                       # tests set False to skip subprocess launch
+    mcp_config_path: str = "mcp/servers.json"      # relative → resolved against ROOT
+    mcp_startup_timeout_s: float = 20.0            # per-server start budget (never hang startup)
+
     # ── Use-case toggles (all off in Phase 1) ────────────────────────────────
     uc1_morning_brief: bool = False
     uc2_kite_token_guard: bool = False

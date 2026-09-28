@@ -86,6 +86,37 @@ normal chat. `GET /skills` lists them. Built-in:
 - **trading_read** — read-only OptionIQ: portfolio NAV/P&L, momentum basket, Big Player,
   Kite status. Never places or suggests trades.
 
+## Tools (Phase 5)
+Deterministic, LLM-free capabilities the agent runs *before* the model and injects
+the result into context. Each tool declares a permission tier — **READ** (auto),
+**WRITE** (needs confirmation), **FINANCIAL** (always refused unless `confirm=True`;
+JARVIS is read-only on money so it's never executed). Every call is audited to the
+SQLite `audit_log` table and `logs/tools.log`. Built-in (all READ):
+- **file_reader** — `read file <path>`; path-allowlisted to `data/` and `~/Downloads`,
+  txt/md/json/csv only, 50KB cap.
+- **calculator** — `calculate <expr>` / `what is <expr>`; AST-safe (no eval/exec),
+  `+ - * / // % **` plus `sqrt/log/round`.
+- **datetime** — `what time is it`, `is market open`, `days until YYYY-MM-DD`; IST clock
+  and NSE session check (schedule only, not a trading signal).
+- **web_search** — `search for X` / `look up X` / `google X`; DuckDuckGo, no API key,
+  10s timeout, max 10 results, spam domains dropped.
+- **web_fetch** — `fetch <url>` / `open url X` / `read page X`; httpx + BeautifulSoup,
+  extracts text/title/links. SSRF-guarded (private/loopback IPs blocked, re-checked
+  after redirects), 100KB cap, 15s timeout.
+
+## MCP servers (Phase 6)
+JARVIS can use tools from external [Model Context Protocol](https://modelcontextprotocol.io)
+servers declared in `mcp/servers.json`. On startup each enabled server is launched
+(stdio), its tools are discovered and registered as `<server>.<tool>` at the server's
+permission tier. Startup is resilient: a server that fails to launch (missing `npx`,
+bad package, SDK absent, or a start timeout) is logged, recorded with its error, and
+skipped — it never takes JARVIS down. Check discovery with:
+```bash
+curl -s http://localhost:8100/mcp/status | python3 -m json.tool   # {server: {enabled, tool_count, error}}
+curl -s http://localhost:8100/tools | python3 -m json.tool         # all registered tools
+```
+Full guide (adding a server, permission tiers, Brave Search example): `docs/ADDING_MCP_SERVERS.md`.
+
 ## Layout
 ```
 backend/   config, logging, main (FastAPI)

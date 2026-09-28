@@ -16,11 +16,13 @@ from .api.routes import router as api_router
 from .config import ROOT, Settings, get_settings
 from .database.db import DB, run_migrations
 from .logging_setup import get_logger, setup_logging
+from .mcp.registry import MCPRegistry
 from .memory.service import MemoryService
 from .models.router import ModelRouter
 from .models.spend import SpendTracker
 from .security.ratelimit import RateLimitMiddleware
 from .skills.registry import SkillRegistry
+from .tools import TOOL_REGISTRY
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -40,6 +42,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         router = ModelRouter(settings, spend)
         memory = MemoryService.create(settings)      # graceful no-op if PG/DATABASE_URL absent
         skills = SkillRegistry.load()
+
+        # MCP: discover external servers and register their tools into TOOL_REGISTRY.
+        # Failures are recorded per-server and skipped — they never block startup.
+        mcp = MCPRegistry()
+        if settings.mcp_enabled:
+            try:
+                await mcp.startup(TOOL_REGISTRY, settings.mcp_config_path,
+                                  timeout_s=settings.mcp_startup_timeout_s)
+            except Exception:
+                log.exception("mcp.startup_error")
+
         agent = Agent(db, router, memory=memory, skills=skills, settings=settings,
                       usd_inr_rate=settings.usd_inr_rate, memory_top_k=settings.memory_retrieve_top_k)
         app.state.settings = settings
@@ -48,10 +61,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.router = router
         app.state.memory = memory
         app.state.skills = skills
+        app.state.tools = TOOL_REGISTRY
+        app.state.mcp = mcp
         app.state.agent = agent
         log.info("startup", extra={
             "memory": memory.status(),
             "skills": [s["name"] for s in skills.list_skills()],
+            "tools": [t["name"] for t in TOOL_REGISTRY.list_all()],
+            "mcp": mcp.get_server_status(),
             "version": settings.version,
             "use_cases": settings.use_case_flags(),
             "slots": settings.task_slots,
@@ -59,6 +76,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             yield
         finally:
+            await mcp.shutdown()
             db.close()
             log.info("shutdown")
 

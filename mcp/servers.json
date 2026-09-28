@@ -1,0 +1,13 @@
+{
+  "servers": [
+    {
+      "name": "filesystem",
+      "enabled": true,
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/mahavir/Desktop/jarvis/data"],
+      "description": "Read/write files in jarvis data directory",
+      "permission": "READ"
+    }
+  ]
+}

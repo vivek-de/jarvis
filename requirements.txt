@@ -12,6 +12,9 @@ httpx>=0.28               # async HTTP client — Ollama /api/chat + /api/embedd
 python-dotenv>=1.0        # load .env for the CLI/scripts outside the app process
 psycopg[binary]>=3.2      # Postgres driver (Phase 3 long-term memory)
 pgvector>=0.3             # pgvector <-> psycopg adapter (vector type registration)
+mcp>=1.0.0                # Model Context Protocol SDK — stdio client for external MCP servers (Phase 6)
+beautifulsoup4>=4.12.0    # HTML parsing for web_fetch (strip scripts/nav, extract main text) (Phase 7)
+duckduckgo-search>=6.0.0  # keyless web search backend for web_search (Phase 7)
 
 # ── dev / test ───────────────────────────────────────────────────────────────
 pytest>=8.4

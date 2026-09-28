@@ -69,6 +69,16 @@ async def list_skills(request: Request):
     return {"skills": request.app.state.skills.list_skills()}
 
 
+@router.get("/tools")
+async def list_tools(request: Request):
+    return {"tools": request.app.state.tools.list_all()}
+
+
+@router.get("/mcp/status")
+async def mcp_status(request: Request):
+    return {"servers": request.app.state.mcp.get_server_status()}
+
+
 @router.get("/conversations/{cid}")
 async def get_conversation(cid: str, request: Request):
     db = request.app.state.db
