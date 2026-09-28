@@ -34,8 +34,16 @@ class Settings(BaseSettings):
     env: str = "dev"
     version: str = "0.1.0"
 
-    # ── Database (SQLite in Phase 1) ─────────────────────────────────────────
+    # ── Database (SQLite = conversation sessions, Phase 1+) ──────────────────
     db_path: str = "data/jarvis.db"
+
+    # ── Long-term memory (Postgres + pgvector, Phase 3) ──────────────────────
+    # Empty → long-term memory is disabled and JARVIS runs on SQLite sessions only.
+    database_url: str = ""      # e.g. postgresql://mahavir@localhost:5432/jarvis
+    embed_model: str = "nomic-embed-text"   # Ollama embedding model (768-dim)
+    embed_dim: int = 768
+    memory_dedupe_threshold: float = 0.92   # cosine sim ≥ this ⇒ update, not insert
+    memory_retrieve_top_k: int = 5          # memories injected into context per turn
 
     # ── Local model (Ollama) ─────────────────────────────────────────────────
     ollama_base_url: str = "http://localhost:11434"

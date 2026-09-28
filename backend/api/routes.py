@@ -38,6 +38,7 @@ async def health(request: Request):
         "db": {"ok": db_ok, "path": str(settings.db_file)},
         "ollama": ollama,
         "identity": identity_status(),
+        "memory": app.state.memory.status(),
         "spend_today_inr": app.state.spend.spent_today(),
         "spend_cap_inr": settings.daily_spend_cap_inr,
     }

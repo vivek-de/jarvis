@@ -115,6 +115,31 @@ def main() -> int:
           or "os login" in soul_md.lower())
     check("SOUL.md carries read-only trading rule", "read-only" in soul_md.lower())
 
+    print("[7] memory logic (Phase 3 — importance / commands / dedupe)")
+    from backend.memory.commands import parse_command
+    from backend.memory.dedupe import cosine_similarity, is_duplicate
+    from backend.memory.importance import score_for
+    check("importance correction=0.95", score_for("correction") == 0.95)
+    check("importance preference=0.9", score_for("preference") == 0.9)
+    check("importance project=0.8", score_for("project") == 0.8)
+    check("importance chatter=0.1", score_for("chatter") == 0.1)
+    check("importance default=0.5", score_for("???") == 0.5)
+    check("cmd remember", (lambda c: c and c.kind == "remember")(parse_command("remember I trade NIFTY")))
+    check("cmd recall", (lambda c: c and c.kind == "recall")(parse_command("what do you know about OptionIQ?")))
+    check("cmd delete-all before forget", (lambda c: c and c.kind == "delete")(parse_command("delete everything about EcoCycle")))
+    check("cmd forget", (lambda c: c and c.kind == "forget")(parse_command("forget my old note")))
+    check("cmd none for chat", parse_command("how is the market?") is None)
+    check("dedupe >=0.92 True", is_duplicate(0.93, 0.92) is True)
+    check("dedupe <0.92 False", is_duplicate(0.90, 0.92) is False)
+    check("cosine identical ~1", abs(cosine_similarity([1, 0, 0], [1, 0, 0]) - 1.0) < 1e-9)
+
+    print("[8] migration 002 SQL present + shaped")
+    sql = (ROOT / "backend" / "memory" / "migrations" / "002_memories.sql").read_text()
+    check("002 has vector(768)", "vector(768)" in sql)
+    check("002 has HNSW index", "hnsw" in sql.lower() and "vector_cosine_ops" in sql)
+    check("002 has superseded_by", "superseded_by" in sql)
+    check("002 tracks migrations", "memory_schema_migrations" in sql)
+
     db.close()
     print(f"\nSANDBOX CHECK: {_passed} passed, {_failed} failed")
     return 1 if _failed else 0

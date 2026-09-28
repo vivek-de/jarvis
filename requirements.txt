@@ -8,8 +8,10 @@ fastapi>=0.117            # ASGI web framework — /health, /chat, typed request
 uvicorn[standard]>=0.34   # ASGI server to run FastAPI
 pydantic>=2.12            # validation; 2.12+ ships cp313/cp314 wheels for pydantic-core
 pydantic-settings>=2.11   # 12-factor config from .env with typed validation
-httpx>=0.28               # async HTTP client — Ollama /api/chat, later web/OptionIQ
+httpx>=0.28               # async HTTP client — Ollama /api/chat + /api/embeddings, web/OptionIQ
 python-dotenv>=1.0        # load .env for the CLI/scripts outside the app process
+psycopg[binary]>=3.2      # Postgres driver (Phase 3 long-term memory)
+pgvector>=0.3             # pgvector <-> psycopg adapter (vector type registration)
 
 # ── dev / test ───────────────────────────────────────────────────────────────
 pytest>=8.4

@@ -60,6 +60,19 @@ python3 scripts/_sandbox_check.py
 Exercises migrations, the spend cap, and the router fallback logic using only the
 standard library.
 
+## Long-term memory (Phase 3, Postgres + pgvector)
+Optional — JARVIS runs without it. To enable: set `JARVIS_DATABASE_URL` in `.env`
+(e.g. `postgresql://<you>@localhost:5432/jarvis`) with `CREATE EXTENSION vector` done
+on that DB, and `ollama pull nomic-embed-text`. The app auto-applies the memory
+migration on startup; or run it standalone:
+```bash
+python3 scripts/migrate.py
+```
+Chat commands: `remember <X>`, `what do you know about <X>`, `forget <X>`,
+`delete everything about <X>`. During normal chat, JARVIS retrieves the top-K
+relevant memories into context and stores new durable facts per the Phase-2 policy.
+SQLite still holds conversation sessions; Postgres holds long-term memory only.
+
 ## Layout
 ```
 backend/   config, logging, main (FastAPI)

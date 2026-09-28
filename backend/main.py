@@ -16,6 +16,7 @@ from .api.routes import router as api_router
 from .config import ROOT, Settings, get_settings
 from .database.db import DB, run_migrations
 from .logging_setup import get_logger, setup_logging
+from .memory.service import MemoryService
 from .models.router import ModelRouter
 from .models.spend import SpendTracker
 from .security.ratelimit import RateLimitMiddleware
@@ -36,13 +37,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         db = DB(settings.db_file)
         spend = SpendTracker(db.conn, settings.daily_spend_cap_inr)
         router = ModelRouter(settings, spend)
-        agent = Agent(db, router, usd_inr_rate=settings.usd_inr_rate)
+        memory = MemoryService.create(settings)      # graceful no-op if PG/DATABASE_URL absent
+        agent = Agent(db, router, memory=memory, usd_inr_rate=settings.usd_inr_rate,
+                      memory_top_k=settings.memory_retrieve_top_k)
         app.state.settings = settings
         app.state.db = db
         app.state.spend = spend
         app.state.router = router
+        app.state.memory = memory
         app.state.agent = agent
         log.info("startup", extra={
+            "memory": memory.status(),
             "version": settings.version,
             "use_cases": settings.use_case_flags(),
             "slots": settings.task_slots,
